@@ -1,0 +1,7 @@
+com\example\catalog\domain\Product.class
+com\example\catalog\repo\ProductRepository.class
+com\example\catalog\CatalogApplication.class
+com\example\catalog\service\FileStorageService.class
+com\example\catalog\api\dto\CreateProductRequest.class
+com\example\catalog\domain\Product$ProductBuilder.class
+com\example\catalog\api\dto\ProductResponse.class

@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Products</title>
+  <style>
+     :root {
+        --primary: #4361ee;
+        --secondary: #3a0ca3;
+        --light: #f8f9fa;
+        --dark: #212529;
+        --success: #4cc9f0;
+        --danger: #f72585;
+        --warning: #ff9e00;
+        --gray: #6c757d;
+     }
+     body { background: #f5f7ff; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; }
+     h1, h2 { color: var(--dark); }
+     .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 20px; margin-top: 20px; }
+     .product-card { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+     .product-card img { width: 100%; height: 200px; object-fit: cover; }
+     .product-info { padding: 15px; }
+     .product-title { font-weight: bold; margin-bottom: 8px; }
+     .product-price { color: var(--primary); font-weight: bold; }
+     button { cursor: pointer; border: none; padding: 10px 15px; border-radius: 6px; font-weight: 600; }
+     .btn { background: var(--primary); color: white; margin: 5px; }
+     .btn:hover { background: var(--secondary); }
+     .btn-danger { background: var(--danger); }
+     .btn-danger:hover { background: #d1146a; }
+     .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; }
+     .modal-content { background:white; padding:20px; border-radius:10px; width:90%; max-width:600px; }
+     .close-modal { float:right; cursor:pointer; font-size:22px; }
+     .image-preview { max-width:100%; max-height:200px; margin-top:10px; display:none; }
+  </style>
+</head>
+<body>
+  <h1>Admin: Manage Products</h1>
+
+  <button id="add-product-btn" class="btn">+ Add Product</button>
+
+  <div id="admin-product-container" class="product-grid"></div>
+
+  <h2>Customer View</h2>
+  <div id="customer-product-container" class="product-grid"></div>
+  <p>Last checked: <span id="last-checked">Just now</span></p>
+
+  <!-- Modal -->
+  <div class="modal" id="product-modal">
+    <div class="modal-content">
+      <span class="close-modal" id="close-modal">&times;</span>
+      <h2 id="modal-title">Add Product</h2>
+      <form id="product-form">
+        <input type="hidden" id="product-id">
+        <label>Product Name</label>
+        <input type="text" id="product-name" required><br><br>
+        <label>Description</label>
+        <textarea id="product-description" required></textarea><br><br>
+        <label>Price ($)</label>
+        <input type="number" id="product-price" required min="0" step="0.01"><br><br>
+        <label>Image</label>
+        <input type="file" id="product-image" accept="image/*"><br>
+        <img id="image-preview" class="image-preview"><br>
+        <button type="submit" class="btn">Save Product</button>
+      </form>
+    </div>
+  </div>
+
+<script>
+const API_URL = "/api/products";
+const adminProductContainer = document.getElementById("admin-product-container");
+const customerProductContainer = document.getElementById("customer-product-container");
+const productForm = document.getElementById("product-form");
+const productModal = document.getElementById("product-modal");
+const modalTitle = document.getElementById("modal-title");
+const productIdInput = document.getElementById("product-id");
+const imageInput = document.getElementById("product-image");
+const imagePreview = document.getElementById("image-preview");
+const addProductBtn = document.getElementById("add-product-btn");
+const closeModalBtn = document.getElementById("close-modal");
+
+// ------------------- LOAD ADMIN PRODUCTS -------------------
+async function loadAdminProducts() {
+  const res = await fetch(`${API_URL}/get`);
+  console.log(res);
+  const products = await res.json();
+  adminProductContainer.innerHTML = "";
+  products.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "product-card";
+    card.innerHTML = `
+      <img src="${p.imageUrl || 'uploads/no-image.jpg'}">
+      <div class="product-info">
+        <h3 class="product-title">${p.name}</h3>
+        <p>${p.description}</p>
+        <p class="product-price">$${p.price.toFixed(2)}</p>
+        <button class="btn" onclick="openProductModal(${p.id}, '${p.name}', '${p.description}', ${p.price})">Edit</button>
+        <button class="btn-danger" onclick="deleteProduct(${p.id})">Delete</button>
+      </div>
+    `;
+    adminProductContainer.appendChild(card);
+  });
+}
+
+// ------------------- LOAD CUSTOMER PRODUCTS -------------------
+async function loadCustomerProducts() {
+  const res = await fetch(`${API_URL}/get`);
+  const products = await res.json();
+  customerProductContainer.innerHTML = "";
+  if (products.length === 0) {
+    customerProductContainer.innerHTML = "<p>No products available.</p>";
+    return;
+  }
+  products.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "product-card";
+    card.innerHTML = `
+      <img src="${p.imageUrl || 'uploads/no-image.jpg'}">
+      <div class="product-info">
+        <h3 class="product-title">${p.name}</h3>
+        <p>${p.description}</p>
+        <p class="product-price">$${p.price.toFixed(2)}</p>
+      </div>
+    `;
+    customerProductContainer.appendChild(card);
+  });
+  document.getElementById("last-checked").textContent = new Date().toLocaleTimeString();
+}
+
+// ------------------- SAVE PRODUCT -------------------
+productForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const formData = new FormData();
+  formData.append("name", document.getElementById("product-name").value);
+  formData.append("description", document.getElementById("product-description").value);
+  formData.append("price", document.getElementById("product-price").value);
+  if (imageInput.files.length > 0) {
+    formData.append("image", imageInput.files[0]);
+  }
+
+  const res = await fetch(`${API_URL}`, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!res.ok) {
+    console.error("Upload failed:", await res.text());
+    return;
+  }
+
+  const product = await res.json();
+  console.log("Saved product:", product);
+
+  closeProductModal();
+  loadAdminProducts();
+  loadCustomerProducts();
+});
+
+// ------------------- DELETE -------------------
+async function deleteProduct(id) {
+  if (!confirm("Delete this product?")) return;
+  await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+  loadAdminProducts();
+  loadCustomerProducts();
+}
+
+// ------------------- MODAL -------------------
+function openProductModal(id=null, name="", desc="", price=0, category="") {
+  if (id) {
+    modalTitle.textContent = "Edit Product";
+    productIdInput.value = id;
+    document.getElementById("product-name").value = name;
+    document.getElementById("product-description").value = desc;
+    document.getElementById("product-price").value = price;
+    document.getElementById("product-category").value = category;
+  } else {
+    modalTitle.textContent = "Add Product";
+    productIdInput.value = "";
+    productForm.reset();
+    imagePreview.style.display = "none";
+  }
+  productModal.style.display = "flex";
+}
+function closeProductModal() { productModal.style.display = "none"; }
+
+// ------------------- IMAGE PREVIEW -------------------
+imageInput.addEventListener("change", () => {
+  const file = imageInput.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (e) => { imagePreview.src = e.target.result; imagePreview.style.display = "block"; };
+    reader.readAsDataURL(file);
+  }
+});
+
+// Init
+addProductBtn.addEventListener("click", () => openProductModal());
+closeModalBtn.addEventListener("click", closeProductModal);
+window.addEventListener("click", (e) => { if (e.target === productModal) closeProductModal(); });
+
+loadAdminProducts();
+loadCustomerProducts();
+setInterval(loadCustomerProducts, 10000); // auto-refresh fallback
+</script>
+</body>
+</html>
+
+
+
+    <!-- <script>
+        // DOM elements
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const productForm = document.getElementById('product-form');
+        const adminProductContainer = document.getElementById('admin-product-container');
+        const customerProductContainer = document.getElementById('customer-product-container');
+        const notification = document.getElementById('notification');
+        const lastChecked = document.getElementById('last-checked');
+        const imageInput = document.getElementById('product-image');
+        const imagePreview = document.getElementById('image-preview');
+        const productModal = document.getElementById('product-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const productIdInput = document.getElementById('product-id');
+        const addProductBtn = document.getElementById('add-product-btn');
+        const closeModalBtn = document.querySelector('.close-modal');
+        const searchInput = document.getElementById('search-input');
+        const searchBtn = document.getElementById('search-btn');
+
+        // Initialize products array in localStorage if not exists
+        if (!localStorage.getItem('products')) {
+            // Sample initial products
+            const sampleProducts = [
+                {
+                    id: 1,
+                    name: "Wireless Headphones",
+                    description: "High-quality wireless headphones with noise cancellation",
+                    price: 129.99,
+                    category: "electronics",
+                    image: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjNDM2MWVlIj48cGF0aCBkPSJNMTIgMkM2LjQ4IDIgMiA2LjQ4IDIgMTJzNC40OCAxMCAxMCAxMCAxMC00LjQ4IDEwLTEwUzE3LjUyIDIgMTIgMnptMCAxOGMtNC40MiAwLTgtMy41OC04LThzMy41OC04IDgtOCA4IDMuNTggOCA4LTMuNTggOC04IDh6Ii8+PHBhdGggZD0iTTEyIDdjLTIuNzYgMC01IDIuMjQtNSA1czIuMjQgNSA1IDUgNS0yLjI0IDUtNS0yLjI0LTUtNS01em0wIDhjLTEuNjYgMC0zLTEuMzQtMy0zczEuMzQtMyAzLTMgMyAxLjM0IDMgMy0xLjM0IDMtMyAzeiIvPjwvc3ZnPg==",
+                    timestamp: new Date().toISOString()
+                },
+                {
+                    id: 2,
+                    name: "Running Shoes",
+                    description: "Comfortable running shoes with extra cushioning",
+                    price: 89.99,
+                    category: "sports",
+                    image: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjNDM2MWVlIj48cGF0aCBkPSJNMTggM0g5Yy0xLjY2IDAtMyAxLjMzOS0zIDN2MTJoMTJWNmMwLTEuNjYtMS4zNC0zLTMtM3ptMCAxSDljLS41NSAwLTEgLjQ1LTEgMXYxMGgxMlY1YzAtLjU1LS40NS0xLTEtMXoiLz48cGF0aCBkPSJNMTUgN2MtLjU1IDAtMSAuNDUtMSAxdjRjMCAuNTUuNDUgMSAxIDFzMS0uNDUgMS0xVjhjMC0uNTUtLjQ1LTEtMS0xem0tNiA0YzAgLjU1LS40NSAxLTEgMXMtMS0uNDUtMS0xVjhjMC0uNTUuNDUtMSAxLTFzMSAuNDUgMSAxdjN6bTAgMHYzYzAgLjU1LS40NSAxLTEgMXMtMS0uNDUtMS0xdi0zYzAtLjU1LjQ1LTEgMS0xczEgLjQ1IDEgMXptMTIgMHYzYzAgLjU1LS40NSAxLTEgMXMtMS0uNDUtMS0xdi0zYzAtLjU1LjQ1LTEgMS0xczEgLjQ1IDEgMXptLTYgMHYzYzAgLjU1LS40NSAxLTEgMXMtMS0uNDUtMS0xdi0zYzAtLjU1LjQ1LTEgMS0xczEgLjQ1IDEgMXoiLz48L3N2Zz4=",
+                    timestamp: new Date().toISOString()
+                }
+            ];
+            localStorage.setItem('products', JSON.stringify(sampleProducts));
+        }
+
+        // Tab switching functionality
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabId = tab.getAttribute('data-tab');
+                
+                // Update active tab
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Show corresponding content
+                tabContents.forEach(content => {
+                    content.classList.remove('active');
+                    if (content.id === `${tabId}-tab`) {
+                        content.classList.add('active');
+                    }
+                });
+                
+                // If switching to customer view, update products
+                if (tabId === 'customer') {
+                    loadCustomerProducts();
+                    startProductCheck();
+                } else {
+                    loadAdminProducts();
+                    stopProductCheck();
+                }
+            });
+        });
+
+        // Image preview functionality
+        imageInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    imagePreview.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Open modal for adding new product
+        addProductBtn.addEventListener('click', () => {
+            openProductModal();
+        });
+
+        // Close modal
+        closeModalBtn.addEventListener('click', () => {
+            closeProductModal();
+        });
+
+        // Click outside modal to close
+        window.addEventListener('click', (e) => {
+            if (e.target === productModal) {
+                closeProductModal();
+            }
+        });
+
+        // Search functionality
+        searchBtn.addEventListener('click', searchProducts);
+        searchInput.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') {
+                searchProducts();
+            }
+        });
+
+        // Handle product form submission
+        productForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const id = productIdInput.value;
+            const name = document.getElementById('product-name').value;
+            const description = document.getElementById('product-description').value;
+            const price = parseFloat(document.getElementById('product-price').value);
+            const category = document.getElementById('product-category').value;
+            const imageFile = document.getElementById('product-image').files[0];
+            
+            if (imageFile || id) {
+                // If editing and no new image, keep the existing one
+                if (imageFile) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        saveProduct(id, name, description, price, category, e.target.result);
+                    };
+                    reader.readAsDataURL(imageFile);
+                } else {
+                    // Get existing product image if editing
+                    const products = JSON.parse(localStorage.getItem('products'));
+                    const existingProduct = products.find(p => p.id == id);
+                    saveProduct(id, name, description, price, category, existingProduct.image);
+                }
+            }
+        });
+
+        // Save product to storage
+        function saveProduct(id, name, description, price, category, imageData) {
+            // Create product object
+            const product = {
+                id: id ? parseInt(id) : Date.now(), // Use existing ID or create new one
+                name,
+                description,
+                price,
+                category,
+                image: imageData,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Save to localStorage
+            const products = JSON.parse(localStorage.getItem('products'));
+            
+            if (id) {
+                // Update existing product
+                const index = products.findIndex(p => p.id == id);
+                if (index !== -1) {
+                    products[index] = product;
+                }
+            } else {
+                // Add new product
+                products.push(product);
+            }
+            
+            localStorage.setItem('products', JSON.stringify(products));
+            
+            // Reset form and close modal
+            productForm.reset();
+            imagePreview.style.display = 'none';
+            closeProductModal();
+            
+            // Reload products
+            loadAdminProducts();
+            if (document.getElementById('customer-tab').classList.contains('active')) {
+                loadCustomerProducts();
+            }
+            
+            // Show success message
+            alert(`Product ${id ? 'updated' : 'added'} successfully!`);
+        }
+
+        // Open product modal for adding/editing
+        function openProductModal(product = null) {
+            if (product) {
+                // Editing existing product
+                modalTitle.textContent = "Edit Product";
+                productIdInput.value = product.id;
+                document.getElementById('product-name').value = product.name;
+                document.getElementById('product-description').value = product.description;
+                document.getElementById('product-price').value = product.price;
+                document.getElementById('product-category').value = product.category;
+                
+                // Show existing image
+                imagePreview.src = product.image;
+                imagePreview.style.display = 'block';
+            } else {
+                // Adding new product
+                modalTitle.textContent = "Add New Product";
+                productIdInput.value = "";
+                productForm.reset();
+                imagePreview.style.display = 'none';
+            }
+            
+            productModal.style.display = 'flex';
+        }
+
+        // Close product modal
+        function closeProductModal() {
+            productModal.style.display = 'none';
+        }
+
+        // Load products in admin view
+        function loadAdminProducts() {
+            const products = JSON.parse(localStorage.getItem('products'));
+            adminProductContainer.innerHTML = '';
+            
+            if (products.length === 0) {
+                adminProductContainer.innerHTML = '<p>No products available yet.</p>';
+                return;
+            }
+            
+            // Display products
+            products.forEach(product => {
+                const productCard = document.createElement('div');
+                productCard.className = 'product-card';
+                productCard.innerHTML = `
+                    <img src="${product.image}" alt="${product.name}" class="product-image">
+                    <div class="product-info">
+                        <h3 class="product-title">${product.name}</h3>
+                        <p class="product-description">${product.description}</p>
+                        <p class="product-price">$${product.price.toFixed(2)}</p>
+                        <div class="product-actions">
+                            <button class="action-btn btn-warning edit-btn" data-id="${product.id}">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="action-btn btn-danger delete-btn" data-id="${product.id}">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+                adminProductContainer.appendChild(productCard);
+            });
+            
+            // Add event listeners to edit and delete buttons
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.closest('.edit-btn').getAttribute('data-id');
+                    const products = JSON.parse(localStorage.getItem('products'));
+                    const product = products.find(p => p.id == id);
+                    if (product) {
+                        openProductModal(product);
+                    }
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.closest('.delete-btn').getAttribute('data-id');
+                    if (confirm('Are you sure you want to delete this product?')) {
+                        deleteProduct(id);
+                    }
+                });
+            });
+        }
+
+        // Load products in customer view
+        function loadCustomerProducts() {
+            const products = JSON.parse(localStorage.getItem('products'));
+            customerProductContainer.innerHTML = '';
+            
+            if (products.length === 0) {
+                customerProductContainer.innerHTML = '<p>No products available yet.</p>';
+                return;
+            }
+            
+            // Display products
+            products.forEach(product => {
+                const productCard = document.createElement('div');
+                productCard.className = 'product-card';
+                productCard.innerHTML = `
+                    <img src="${product.image}" alt="${product.name}" class="product-image">
+                    <div class="product-info">
+                        <h3 class="product-title">${product.name}</h3>
+                        <p class="product-description">${product.description}</p>
+                        <p class="product-price">$${product.price.toFixed(2)}</p>
+                    </div>
+                `;
+                customerProductContainer.appendChild(productCard);
+            });
+            
+            // Update last checked time
+            lastChecked.textContent = new Date().toLocaleTimeString();
+        }
+
+        // Delete a product
+        function deleteProduct(id) {
+            const products = JSON.parse(localStorage.getItem('products'));
+            const updatedProducts = products.filter(p => p.id != id);
+            localStorage.setItem('products', JSON.stringify(updatedProducts));
+            
+            // Reload products
+            loadAdminProducts();
+            if (document.getElementById('customer-tab').classList.contains('active')) {
+                loadCustomerProducts();
+            }
+            
+            alert('Product deleted successfully!');
+        }
+
+        // Search products
+        function searchProducts() {
+            const query = searchInput.value.toLowerCase();
+            const products = JSON.parse(localStorage.getItem('products'));
+            
+            if (!query) {
+                loadAdminProducts();
+                return;
+            }
+            
+            const filteredProducts = products.filter(product => 
+                product.name.toLowerCase().includes(query) || 
+                product.description.toLowerCase().includes(query) ||
+                product.category.toLowerCase().includes(query)
+            );
+            
+            adminProductContainer.innerHTML = '';
+            
+            if (filteredProducts.length === 0) {
+                adminProductContainer.innerHTML = '<p>No products found matching your search.</p>';
+                return;
+            }
+            
+            // Display filtered products
+            filteredProducts.forEach(product => {
+                const productCard = document.createElement('div');
+                productCard.className = 'product-card';
+                productCard.innerHTML = `
+                    <img src="${product.image}" alt="${product.name}" class="product-image">
+                    <div class="product-info">
+                        <h3 class="product-title">${product.name}</h3>
+                        <p class="product-description">${product.description}</p>
+                        <p class="product-price">$${product.price.toFixed(2)}</p>
+                        <div class="product-actions">
+                            <button class="action-btn btn-warning edit-btn" data-id="${product.id}">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="action-btn btn-danger delete-btn" data-id="${product.id}">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+                adminProductContainer.appendChild(productCard);
+            });
+            
+            // Add event listeners to edit and delete buttons
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.closest('.edit-btn').getAttribute('data-id');
+                    const products = JSON.parse(localStorage.getItem('products'));
+                    const product = products.find(p => p.id == id);
+                    if (product) {
+                        openProductModal(product);
+                    }
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.closest('.delete-btn').getAttribute('data-id');
+                    if (confirm('Are you sure you want to delete this product?')) {
+                        deleteProduct(id);
+                    }
+                });
+            });
+        }
+
+        // Variables for product checking
+        let productCheckInterval;
+        let lastProductCount = 0;
+
+        // Start checking for new products
+        function startProductCheck() {
+            // Load initial products
+            const products = JSON.parse(localStorage.getItem('products'));
+            lastProductCount = products.length;
+            
+            // Set up interval to check for new products every 5 seconds
+            productCheckInterval = setInterval(() => {
+                const currentProducts = JSON.parse(localStorage.getItem('products'));
+                
+                // If new products were added
+                if (currentProducts.length !== lastProductCount) {
+                    loadCustomerProducts();
+                    showNotification();
+                    lastProductCount = currentProducts.length;
+                }
+                
+                // Update last checked time
+                lastChecked.textContent = new Date().toLocaleTimeString();
+            }, 5000);
+        }
+
+        // Stop checking for new products
+        function stopProductCheck() {
+            clearInterval(productCheckInterval);
+        }
+
+        // Show notification for new products
+        function showNotification() {
+            notification.classList.add('show');
+            
+            // Hide notification after 3 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Initialize the page
+        function init() {
+            // Load products in admin view by default
+            loadAdminProducts();
+        }
+
+        // Run initialization
+        init();
+    </script> -->
+
+  <!-- <div class="card">
+    <h3>Create product</h3>
+    <div class="row">
+      <div>
+        <label>Name</label>
+        <input id="name" placeholder="e.g. Fresh Mangoes" />
+      </div>
+      <div>
+        <label>Price</label>
+        <input id="price" type="number" step="0.01" placeholder="e.g. 199.00" />
+      </div>
+    </div>
+    <label>Description</label>
+    <textarea id="description" rows="3"></textarea>
+    <div style="margin-top:12px;">
+      <button class="btn" onclick="createProduct()">Create</button>
+      <span id="createStatus"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Upload product image</h3>
+    <div class="row">
+      <div>
+        <label>Product ID</label>
+        <input id="pid" type="number" placeholder="ID from create step" />
+      </div>
+      <div>
+        <label>Choose image</label>
+        <input id="file" type="file" accept="image/*" />
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="btn" onclick="uploadImage()">Upload</button>
+      <span id="uploadStatus"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>All products</h3>
+    <button onclick="loadProducts()">Refresh</button>
+    <div class="list" id="list"></div>
+  </div> -->
+
+  <!-- <script>
+    async function createProduct() {
+      const body = {
+        name: document.getElementById('name').value,
+        description: document.getElementById('description').value,
+        price: parseFloat(document.getElementById('price').value || '0')
+      };
+      const res = await fetch('http://localhost:8080/api/products', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      document.getElementById('createStatus').textContent = 'Created product ID: ' + data.id;
+      document.getElementById('pid').value = data.id;
+      loadProducts();
+    }
+
+    async function uploadImage() {
+      const id = document.getElementById('pid').value;
+      const fileInput = document.getElementById('file');
+      if (!id || fileInput.files.length === 0) {
+        alert('Please enter Product ID and choose an image');
+        return;
+      }
+      const form = new FormData();
+      form.append('file', fileInput.files[0]);
+      const res = await fetch('http://localhost:8080/api/products/' + id + '/image', {
+        method: 'POST',
+        body: form
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        document.getElementById('uploadStatus').textContent = 'Error: ' + t;
+        return;
+      }
+      document.getElementById('uploadStatus').textContent = 'Uploaded!';
+      loadProducts();
+    }
+
+    async function loadProducts() {
+      const res = await fetch('http://localhost:8080/api/products');
+      const items = await res.json();
+      const list = document.getElementById('list');
+      list.innerHTML = items.map(p => `
+        <div style="display:flex;gap:12px;align-items:center;margin:10px 0;">
+          <img src="${p.imageUrl || ''}" onerror="this.style.display='none'"/>
+          <div>
+            <div><b>#${p.id}</b> ${p.name} — ₹${p.price}</div>
+            <div style="font-size:12px;color:#666;">${p.description || ''}</div>
+            ${p.imageUrl ? `<div><a href="${p.imageUrl}" target="_blank">${p.imageUrl}</a></div>` : '<i>No image</i>'}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    loadProducts();
+  </script> -->

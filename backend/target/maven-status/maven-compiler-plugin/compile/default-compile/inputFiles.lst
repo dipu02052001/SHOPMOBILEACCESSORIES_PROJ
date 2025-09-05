@@ -1,0 +1,9 @@
+E:\Projects\Business_projs\ShophoneAccessories_proj\backend\src\main\java\com\example\catalog\api\dto\CreateProductRequest.java
+E:\Projects\Business_projs\ShophoneAccessories_proj\backend\src\main\java\com\example\catalog\api\dto\ProductResponse.java
+E:\Projects\Business_projs\ShophoneAccessories_proj\backend\src\main\java\com\example\catalog\api\OrderRazorpayController.java
+E:\Projects\Business_projs\ShophoneAccessories_proj\backend\src\main\java\com\example\catalog\api\ProductController.java
+E:\Projects\Business_projs\ShophoneAccessories_proj\backend\src\main\java\com\example\catalog\CatalogApplication.java
+E:\Projects\Business_projs\ShophoneAccessories_proj\backend\src\main\java\com\example\catalog\config\WebConfig.java
+E:\Projects\Business_projs\ShophoneAccessories_proj\backend\src\main\java\com\example\catalog\domain\Product.java
+E:\Projects\Business_projs\ShophoneAccessories_proj\backend\src\main\java\com\example\catalog\repo\ProductRepository.java
+E:\Projects\Business_projs\ShophoneAccessories_proj\backend\src\main\java\com\example\catalog\service\FileStorageService.java
