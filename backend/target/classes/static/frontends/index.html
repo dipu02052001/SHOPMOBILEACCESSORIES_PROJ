@@ -718,8 +718,32 @@
           btn.addEventListener("click", () => startPayment(btn.dataset.price));
        });
 
+         document.querySelectorAll(".cart-btn").forEach(btn => {
+          btn.addEventListener("click", () => addtoCart(btn.dataset.id));
+       });
+         // update last checked time        
+
         document.getElementById("last-checked").textContent = new Date().toLocaleTimeString();
     }
+
+
+
+        // Add to cart function
+        async function addtoCart(productId) {
+            try {
+                const response = await fetch(`/api/cart/add`, {
+                    method: "POST"
+                });
+                if (response.ok) {
+                    alert("Product added to cart!");
+                } else {
+                    alert("Failed to add product to cart.");
+                }
+            } catch (error) {
+                console.error("Error adding to cart:", error);
+                alert("An error occurred. Please try again.");
+            }
+        }
 
         // Razorpay payment call
         async function startPayment(price) {

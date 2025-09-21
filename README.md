@@ -8,7 +8,7 @@
 
 ## Run
 ```bash
-./mvnw spring-boot:run   # or: mvn spring-boot:run
+/backend/mvn spring-boot:run   # or: mvn spring-boot:run
 ```
 Open `frontends/admin-basic.html` in your browser and use the forms.
 
